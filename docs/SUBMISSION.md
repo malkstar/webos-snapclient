@@ -21,8 +21,9 @@ apps-repo schemas/linters and the Homebrew Channel source (Oct 2026).
       `sourceUrl`) is satisfied by the packaging repo + that source asset.
 - [ ] **icons**: `iconUri` https + content-type image/*, ≤512 KiB; in-ipk
       `icon.png` 80×80 + `largeIcon.png` 130×130 — REPLACE THE PLACEHOLDERS.
-- [ ] `title` ≤30 chars; `category` from enum (multimedia); screenshots are a
-      lint warning if missing — take a TV photo of the app page → docs/screenshot.png.
+- [ ] `title` ≤30 chars; `category` from enum (multimedia); screenshots are
+      only a lint warning if missing (the webOS inspector disables page
+      capture, so a camera photo of the TV is the honest way to get one).
 - [ ] **ELF symbol verification**: CI runs `webosbrew-ipk-verify` against real
       firmware symbol DBs. Pre-check: `npx @webosbrew/dev-toolbox-cli` →
       `webosbrew-ipk-verify dist/*.ipk`. Our binary is Debian-bullseye-armel

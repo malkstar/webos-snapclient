@@ -30,7 +30,12 @@ config UI and boot autostart. Layers and roadmap: [`VISION.md`](VISION.md).
 ```sh
 # payload: armel snapclient + libsoxr (extract upstream armel debs once they
 # are published, or build per snapcast doc/build.md; see build.sh comments)
-SNAPCLIENT_BIN=/path/to/snapclient LIBSOXR=/path/to/libsoxr.so.0.1.2 ./build.sh
+# RUNTIMELIBS (optional): dir with libssl.so.1.1 libcrypto.so.1.1
+# libstdc++.so.6 libgcc_s.so.1 from Debian bullseye armel debs — CI fetches
+# these sha256-pinned from archive.debian.org; set it for local builds too
+# or the ipk will lack the runtime libs webOS 9 doesn't ship.
+SNAPCLIENT_BIN=/path/to/snapclient LIBSOXR=/path/to/libsoxr.so.0.1.2 \
+RUNTIMELIBS=/path/to/armel-runtimes ./build.sh
 ```
 
 Produces `dist/com.github.malkstar.snapclient_<ver>_all.ipk` +
