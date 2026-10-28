@@ -151,11 +151,15 @@ jobs:
           fetch "$base/o/openssl/libssl1.1_1.1.1w-0+deb11u1_armel.deb" 668c0af73a4fdb18a1b8cdf5c6e5016cd30e9fed98a2999f4786eddb90ce186b
           fetch "$base/g/gcc-10/libstdc++6_10.2.1-6_armel.deb" 0311e80c008ae764e888d3c97ea5b3cdfdb1926ee296f7aa3dc82711fa6a1538
           fetch "$base/g/gcc-10/libgcc-s1_10.2.1-6_armel.deb" 4f022b704c0b8cbf28ed44250a0819373e2374e814b85807d7c918d22e6e1b03
-          find rt -type f \( -name 'libssl.so.*' -o -name 'libcrypto.so.*' \
-                            -o -name 'libstdc++.so.*' -o -name 'libgcc_s.so.*' \) \
-            -exec cp -P {} rtlib/ ';'
+          # -type l too: libstdc++ ships SONAME libstdc++.so.6 as a symlink to
+          # the real .so.6.0.28; cp -P keeps the link, the loader needs it.
+          find rt \( -type f -o -type l \) \( -name 'libssl.so.*' -o -name 'libcrypto.so.*' \
+                     -o -name 'libstdc++.so.*' -o -name 'libgcc_s.so.*' \) \
+            ! -name '*.py' -exec cp -P {} rtlib/ ';'
           ls rtlib/
-          test "$(ls rtlib/ | wc -l)" -eq 4
+          for s in libssl.so.1.1 libcrypto.so.1.1 libstdc++.so.6 libgcc_s.so.1; do
+            test -e "rtlib/$s" || { echo "missing SONAME $s"; exit 1; }
+          done
           echo "RUNTIMELIBS=$PWD/rtlib" >> "$GITHUB_ENV"
 
       - name: Pack ipk + manifest
