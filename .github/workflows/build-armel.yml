@@ -1,0 +1,198 @@
+# Build the armel (32-bit soft-float ARM) snapclient deb from upstream
+# sources, and wrap it into the .ipk — on GitHub-hosted runners, for free.
+#
+# Two purposes:
+#   1. PROOF RECIPE: tools/armel-build-inside.sh mirrors the armel job of the
+#      upstream snapcast package.yml proposal step-for-step, so a green run
+#      here is citable evidence for that PR ("recipe proven"; it says nothing
+#      about snapcast's own self-hosted runners, which we don't own).
+#   2. PAYLOAD SUPPLY: feeds ./build.sh so releases get a reproducible armel
+#      payload instead of a hand-copied binary.
+#
+# RETIREMENT CLAUSE: as soon as upstream snapcast publishes armel debs in its
+# release assets (the PR this workflow proves), delete the build-deb job and
+# switch build.sh to `dpkg-deb -x` of the upstream artifact — this repo must
+# not become the de-facto home of armel builds. Until then, keep the in-container
+# command sequences byte-equivalent to the PR branch (ci/armel-packages of
+# malkstar/snapcast); improvements go upstream first.
+name: Build armel payload
+
+on:
+  workflow_dispatch:
+    inputs:
+      snapcast_ref:
+        description: snapcast tag/branch to build
+        default: v0.35.0
+      variants:
+        description: upstream build variants to run (pulse is the webOS payload)
+        type: choice
+        default: pulse
+        options: [pulse, all]
+  push:
+    tags: ['v*']   # ipk tags mirror the snapcast version they wrap
+
+permissions:
+  contents: read
+
+concurrency:
+  # per-ref groups: a dispatch never cancels a release build and vice versa;
+  # within a ref, the newest run supersedes. (A shared group let a re-tag push
+  # cancel an in-flight release build — seen live with the v0.35.0 attempt.)
+  group: build-armel-${{ github.ref }}
+  cancel-in-progress: true
+
+# versions pinned to whatever the upstream package.yml proposal uses
+# (snapweb intentionally absent: client-only build, see armel-build-inside.sh)
+env:
+  BOOST_VERSION: 1_90_0
+  GH_VERSION: v2.103.2
+
+jobs:
+  build-deb:
+    name: armel deb (bullseye under qemu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240   # same as upstream's armel job
+    steps:
+      # 32-bit arm userland needs qemu binfmt; hosted runners are arm64 today,
+      # so this is the same qemu path we validated locally on Apple Silicon
+      - name: Register qemu binfmt (arm)
+        run: docker run --privileged --rm tonistiigi/binfmt --install arm
+
+      - name: Checkout packaging repo (for tools/armel-build-inside.sh)
+        uses: actions/checkout@v6
+        with:
+          path: packaging
+
+      - name: Checkout snapcast
+        uses: actions/checkout@v6
+        with:
+          repository: snapcast/snapcast
+          ref: ${{ inputs.snapcast_ref || github.ref_name }}
+          path: upstream
+          fetch-depth: 0   # full history for REVISION stamping
+
+      - name: Record upstream revision
+        run: git -C upstream rev-parse HEAD > rev.txt
+
+      # the armel build is qemu-emulated, so recompiles are the cost driver;
+      # persist boost + ccache (script uses $PARENT_DIR/cache) — first run
+      # pays full price, re-runs mostly relink. Bump the -v1 suffix if the
+      # toolchain recipe changes.
+      - name: Restore build cache (boost + ccache)
+        uses: actions/cache@v5
+        with:
+          path: cache
+          key: armel-bullseye-${{ env.BOOST_VERSION }}-ccache-v1
+          restore-keys: |
+            armel-bullseye-${{ env.BOOST_VERSION }}-ccache-
+
+      - name: Build (commands mirrored from upstream package.yml armel job)
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/build" \
+            -w /build/upstream \
+            -e GH_VERSION -e BOOST_VERSION \
+            -e VARIANT="${{ inputs.variants || 'pulse' }}" \
+            -e REVISION="$(git -C upstream rev-parse HEAD)" \
+            multiarch/debian-debootstrap:armel-bullseye \
+            bash /build/packaging/tools/armel-build-inside.sh
+        # known cosmetic quirk: the multiarch armel images are mislabelled
+        # `architecture: amd64`, so docker prints a platform warning; harmless
+
+      - name: Upload debs
+        uses: actions/upload-artifact@v4
+        with:
+          name: armel-debs
+          path: |
+            *.deb
+            rev.txt
+            upstream/libsoxr0*.deb
+          if-no-files-found: error
+
+  build-ipk:
+    name: ipk + channel manifest
+    needs: build-deb
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # gh release upload of dist assets on tag pushes
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Fetch armel debs
+        uses: actions/download-artifact@v4
+        with:
+          name: armel-debs
+          path: debs
+
+      - name: Extract payload from debs
+        run: |
+          set -eu
+          # find, not a flat glob: upload-artifact keeps the dir component of
+          # its patterns, so libsoxr lands under debs/upstream/ in the artifact
+          dpkg-deb -x "$(find debs -name 'snapclient_*_armel_bullseye_with-pulse.deb')" x/
+          dpkg-deb -x "$(find debs -name 'libsoxr0_*.deb')" y/
+          echo "SNAPCLIENT_BIN=$PWD/x/usr/bin/snapclient" >> "$GITHUB_ENV"
+          echo "LIBSOXR=$PWD/$(find y -name 'libsoxr.so.0.*' | head -1)" >> "$GITHUB_ENV"
+
+      # webOS 9 ships OpenSSL 3 and a pre-gcc-10 libstdc++, but the bullseye
+      # payload needs OpenSSL 1.1 + the gcc-10 C++ runtime at runtime. The ipk
+      # bundles them (bin/lib + LD_LIBRARY_PATH wrapper). Bullseye lives on
+      # archive.debian.org post-EOL; hashes pinned (checksum-verified or die).
+      - name: Fetch armel runtime libs (OpenSSL 1.1 + gcc-10)
+        run: |
+          set -eu
+          base=https://archive.debian.org/debian/pool/main
+          mkdir -p rt rtlib
+          fetch() {
+            curl -fsSL "$1" -o rt.deb
+            echo "$2  rt.deb" | sha256sum -c -
+            dpkg-deb -x rt.deb rt/
+          }
+          fetch "$base/o/openssl/libssl1.1_1.1.1w-0+deb11u1_armel.deb" 668c0af73a4fdb18a1b8cdf5c6e5016cd30e9fed98a2999f4786eddb90ce186b
+          fetch "$base/g/gcc-10/libstdc++6_10.2.1-6_armel.deb" 0311e80c008ae764e888d3c97ea5b3cdfdb1926ee296f7aa3dc82711fa6a1538
+          fetch "$base/g/gcc-10/libgcc-s1_10.2.1-6_armel.deb" 4f022b704c0b8cbf28ed44250a0819373e2374e814b85807d7c918d22e6e1b03
+          find rt -type f \( -name 'libssl.so.*' -o -name 'libcrypto.so.*' \
+                            -o -name 'libstdc++.so.*' -o -name 'libgcc_s.so.*' \) \
+            -exec cp -P {} rtlib/ ';'
+          ls rtlib/
+          test "$(ls rtlib/ | wc -l)" -eq 4
+          echo "RUNTIMELIBS=$PWD/rtlib" >> "$GITHUB_ENV"
+
+      - name: Pack ipk + manifest
+        run: |
+          # tag pushes: the ipk version equals the snapcast version being wrapped
+          case "$GITHUB_REF" in
+            refs/tags/v*) echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV" ;;
+          esac
+          ./build.sh
+
+      # GPL-3.0 §6: convey the complete corresponding source at the designated
+      # place — the same release page that offers the .ipk offers this tarball;
+      # the build scripts required alongside it are this workflow + build.sh
+      - name: Stage corresponding source snapshot
+        run: |
+          REV=$(cat debs/rev.txt)
+          curl -fsSL "https://github.com/snapcast/snapcast/archive/${REV}.tar.gz" \
+            -o "dist/snapcast-source-${REV:0:12}.tar.gz"
+          ls -la dist/
+
+      - name: Upload ipk artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipk-dist
+          path: dist/*
+          if-no-files-found: error
+
+      # assets must live in the release the manifest points at
+      # (/releases/latest/download/...). Draft the release in the browser first;
+      # this just attaches. Re-run after drafting if the release didn't exist yet.
+      - name: Attach to GitHub release (tag runs only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # $GITHUB_REF_NAME is the tag with its v intact (v0.35.0) — gh
+          # release upload addresses releases by exact tag name, so the v
+          # must not be stripped here.
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber \
+            || echo "::warning::no release '$GITHUB_REF_NAME' yet — create it, then re-run or attach manually"
