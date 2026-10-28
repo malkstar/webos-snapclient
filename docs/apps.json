@@ -1,0 +1,13 @@
+{
+  "packages": [
+    {
+      "id": "com.github.malkstar.snapclient",
+      "title": "Snapclient",
+      "shortDescription": "Snapcast audio client with millisecond-accurate multi-room sync. Set the server once; runs as a background daemon.",
+      "iconUri": "https://raw.githubusercontent.com/malkstar/webos-snapclient/main/src/app/largeIcon.png",
+      "detailIconUri": "https://raw.githubusercontent.com/malkstar/webos-snapclient/main/src/app/largeIcon.png",
+      "manifestUrl": "https://github.com/malkstar/webos-snapclient/releases/latest/download/com.github.malkstar.snapclient.manifest.json",
+      "fullDescriptionUrl": "https://github.com/malkstar/webos-snapclient#readme"
+    }
+  ]
+}
