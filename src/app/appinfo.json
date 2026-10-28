@@ -1,0 +1,11 @@
+{
+  "id": "com.github.malkstar.snapclient",
+  "version": "0.35.0",
+  "vendor": "malkstar",
+  "title": "Snapclient",
+  "main": "index.html",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "type": "web",
+  "appDescription": "Snapcast audio client with millisecond-accurate multi-room sync"
+}
