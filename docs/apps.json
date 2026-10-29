@@ -7,7 +7,7 @@
       "iconUri": "https://raw.githubusercontent.com/malkstar/webos-snapclient/main/src/app/largeIcon.png",
       "detailIconUri": "https://raw.githubusercontent.com/malkstar/webos-snapclient/main/src/app/largeIcon.png",
       "manifestUrl": "https://github.com/malkstar/webos-snapclient/releases/latest/download/com.github.malkstar.snapclient.manifest.json",
-      "fullDescriptionUrl": "https://github.com/malkstar/webos-snapclient#readme"
+      "fullDescriptionUrl": "https://raw.githubusercontent.com/malkstar/webos-snapclient/main/docs/description.html"
     }
   ]
 }

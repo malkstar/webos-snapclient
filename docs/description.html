@@ -1,0 +1,42 @@
+<!-- Full description rendered by Homebrew Channel (fetched raw and inlined).
+     Keep it dependency-free: basic tags + inline styles, no scripts. -->
+<div style="font-family:sans-serif;line-height:1.5">
+  <p><b>Snapclient</b> plays audio streamed from a
+  <a href="https://github.com/badaix/snapcast">Snapcast</a> server on an LG
+  webOS TV with millisecond-accurate multi-room sync.</p>
+
+  <h3>Requirements</h3>
+  <ul>
+    <li>A rooted TV with <b>Homebrew Channel</b> (the app uses HBC's root
+      exec service to run the daemon &mdash; that's why it says root required)</li>
+    <li>A Snapcast server on your network (snapserver / Music Assistant /
+      Snapcloud &hellip;)</li>
+  </ul>
+
+  <h3>Getting started</h3>
+  <ol>
+    <li>Open the app once. <b>Scan</b> discovers Snapcast servers via mDNS
+      (or type the address).</li>
+    <li><b>Save</b>, then <b>Start</b>. The status line tells you what
+      snapclient sees: <i>playing&nbsp;&middot;&nbsp;sync&nbsp;&plusmn;ms</i>,
+      <i>waiting for server</i>, or <i>stopped</i>.</li>
+    <li>Optionally enable <b>Start at boot</b> under Show advanced &mdash; the
+      daemon then starts on TV boot without opening the app.</li>
+  </ol>
+
+  <h3>Notes</h3>
+  <ul>
+    <li>Volume and client naming live on the <b>server</b> (Snapweb UI)
+      &mdash; that's Snapcast's sync-safe design, v0.35+ removed client-side
+      volume entirely.</li>
+    <li>The default <b>65&nbsp;ms</b> latency was measured on an LG G5;
+      retune per TV model under Show advanced.</li>
+    <li>Packaged from the official Debian <b>armel</b> snapclient build with
+      PulseAudio support; OpenSSL&nbsp;1.1 / gcc-10 runtime libraries are
+      bundled (webOS&nbsp;9 ships OpenSSL&nbsp;3).</li>
+  </ul>
+
+  <p>Source &amp; issues:
+  <a href="https://github.com/malkstar/webos-snapclient">malkstar/webos-snapclient</a>
+  &mdash; GPL-3.0, payload built from upstream Snapcast.</p>
+</div>
